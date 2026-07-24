@@ -1,0 +1,12 @@
+name: ShellCheck Linting
+on: [push, pull_request]
+jobs:
+  lint:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          ignore: SC2086
