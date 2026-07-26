@@ -176,7 +176,7 @@ process_file() {
     month_name=$(get_month_name "$month_num")
     local dest_dir="$ORGANIZED/${year}/${month_name}"
     mkdir -p "$dest_dir"
-    if ! mv "$filepath" "$dest_dir/" 2>/dev/null; then
+    if ! mv "$filepath" "$dest_dir/"; then
         echo "Failed to move: $filename" | tee -a "$LOG_FILE"
     else
         echo "Reorganized: $filename -> $dest_dir/"
