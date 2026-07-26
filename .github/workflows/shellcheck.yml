@@ -9,4 +9,4 @@ jobs:
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
-          ignore: SC2086
+          ignore_paths: "*.sh"
