@@ -180,7 +180,11 @@ process_file() {
     local month_name=$(get_month_name "$month_num")
     local dest_dir="$ORGANIZED/${year}/${month_name}"
     mkdir -p "$dest_dir"
-    mv "$filepath" "$dest_dir/" 2>/dev/null && echo "Organized: $filename -> $dest_dir/" || echo "Failed to move: $filename" | tee -a "$LOG_FILE"
+    if mv "$filepath" "$dest_dir/" 2>/dev/null; then
+    echo "Organized: $filename -> $dest_dir/"
+else
+    echo "Failed to move: $filename" | tee -a "$LOG_FILE"
+fi
 }
 
 # --- Main workflow ---
