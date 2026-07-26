@@ -1,20 +1,21 @@
 #!/bin/bash
 
 # =============================================
-# Reorganize Existing Files Script
-# Re-sorts files already in the "organized" folder.
-# Usage: Edit the paths below, then run: bash reorganize_existing.sh
+# Media Organizer Script
+# Inspired by "Automate the Boring Stuff with Python"
+# Organizes photos/videos by date, converts to MP4, compresses, and auto-enhances.
 # =============================================
 
-# --- CONFIGURATION (EDIT THESE PATHS) ---
-ORGANIZED="/path/to/your/media/organized"    # Folder with existing organized files
+# --- CONFIGURATION (EDIT THESE) ---
+INBOX="/path/to/your/media/to-be-sorted"    # Folder with unsorted media
+ORGANIZED="/path/to/your/media/organized"    # Output folder
 DUPLICATES="/path/to/your/media/duplicates"  # Blurry/corrupt images go here
 TEMP_DIR="/tmp/handbrake_temp"                # Temp files for conversion
 TIMEOUT=120                                    # Timeout in seconds per video
-LOG_FILE="/path/to/your/reorganize_existing.log"  # Log file path
+LOG_FILE="/path/to/your/media_organizer.log"  # Log file path
 
 # --- Create directories ---
-mkdir -p "$ORGANIZED" "$DUPLICATES" "$TEMP_DIR" "/tmp/ffmpeg_logs"
+mkdir -p "$INBOX" "$ORGANIZED" "$DUPLICATES" "$TEMP_DIR" "/tmp/ffmpeg_logs"
 
 # --- Logging ---
 log() {
@@ -53,7 +54,7 @@ get_date_from_filename() {
     fi
 }
 
-# --- Extract date from metadata ---
+# --- Extract date from EXIF or file metadata ---
 get_date() {
     local filepath="$1"
     local filename
@@ -302,10 +303,10 @@ process_file() {
 }
 
 # --- Main workflow ---
-log "=== Reorganize Existing Files Script started ==="
-find "$ORGANIZED" -type f -print0 | while IFS= read -r -d '' filepath; do
+log "=== Script started ==="
+find "$INBOX" -type f -print0 | while IFS= read -r -d '' filepath; do
     process_file "$filepath"
 done
 log "Cleaning up empty folders..."
-find "$ORGANIZED" -depth -type d -empty -exec rmdir {} + 2>/dev/null
-log "=== Reorganize Existing Files Script completed ==="
+find "$INBOX" -depth -type d -empty -exec rmdir {} + 2>/dev/null
+log "=== Script completed ==="
