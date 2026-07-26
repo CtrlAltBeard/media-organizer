@@ -171,21 +171,20 @@ process_file() {
         auto_enhance "$filepath"
     fi
 
-    # Organize by date
-    local date_str=$(get_date "$filepath")
-    local year=$(echo "$date_str" | awk '{print $1}') month_num=$(echo "$date_str" | awk '{print $2}')
-    [ -z "$year" ] && year="notime"
-    [ -z "$month_num" ] && month_num="00"
+# Organize by date
+local date_str=$(get_date "$filepath")
+local year=$(echo "$date_str" | awk '{print $1}') month_num=$(echo "$date_str" | awk '{print $2}')
+[ -z "$year" ] && year="notime"
+[ -z "$month_num" ] && month_num="00"
 
-    local month_name=$(get_month_name "$month_num")
-    local dest_dir="$ORGANIZED/${year}/${month_name}"
-    mkdir -p "$dest_dir"
-    if mv "$filepath" "$dest_dir/" 2>/dev/null; then
+local month_name=$(get_month_name "$month_num")
+local dest_dir="$ORGANIZED/${year}/${month_name}"
+mkdir -p "$dest_dir"
+if mv "$filepath" "$dest_dir/" 2>/dev/null; then
     echo "Organized: $filename -> $dest_dir/"
 else
     echo "Failed to move: $filename" | tee -a "$LOG_FILE"
 fi
-}
 
 # --- Main workflow ---
 log "=== Reorganize Existing Files Script started ==="
