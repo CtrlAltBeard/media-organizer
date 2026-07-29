@@ -195,6 +195,8 @@ log "=== Script started ==="
 find "$INBOX" -type f -print0 | while IFS= read -r -d '' filepath; do
     process_file "$filepath"
 done
+
+# Delete empty folders in to-be-sorted (including nested ones)
 log "Cleaning up empty folders..."
-find "$INBOX" -depth -type d -empty -exec rmdir {} + 2>/dev/null
+find "$INBOX" -depth -type d -empty ! -path "$INBOX" -exec rmdir -v {} \; 2>/dev/null
 log "=== Script completed ==="
