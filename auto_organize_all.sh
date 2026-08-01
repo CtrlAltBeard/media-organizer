@@ -1,21 +1,32 @@
 #!/bin/bash
 
 # =============================================
-# Media Organizer Script
-# Inspired by "Automate the Boring Stuff with Python"
-# Organizes photos/videos by date, converts to MP4, compresses, and auto-enhances.
+# Media Organizer Script (SAFE MODE - Sorting Only)
+# Organizes photos/videos by date into Year/Month folders.
+# Files are NEVER modified, deleted, or converted—only moved.
+#
+# Usage:
+#   1. Edit the CONFIGURATION section below to set your paths.
+#   2. Run: chmod +x auto_organize_all.sh
+#   3. Run: ./auto_organize_all.sh
+#
+# Dependencies:
+#   - exiftool (for date extraction from metadata)
+#   - ffmpeg (optional, for HEIC support)
+#
+# Install dependencies (Ubuntu/Debian):
+#   sudo apt update
+#   sudo apt install -y exiftool ffmpeg
 # =============================================
 
 # --- CONFIGURATION (EDIT THESE) ---
+# Set these to your actual folder paths (no trailing slashes)
 INBOX="/path/to/your/media/to-be-sorted"    # Folder with unsorted media
-ORGANIZED="/path/to/your/media/organized"    # Output folder
-DUPLICATES="/path/to/your/media/duplicates"  # Blurry/corrupt images go here
-TEMP_DIR="/tmp/handbrake_temp"                # Temp files for conversion
-TIMEOUT=120                                    # Timeout in seconds per video
-LOG_FILE="/path/to/your/media_organizer.log"  # Log file path
+ORGANIZED="/path/to/your/media/organized"    # Output folder for sorted media
+LOG_FILE="/path/to/your/media_organizer.log" # Log file path
 
 # --- Create directories ---
-mkdir -p "$INBOX" "$ORGANIZED" "$DUPLICATES" "$TEMP_DIR" "/tmp/ffmpeg_logs"
+mkdir -p "$INBOX" "$ORGANIZED" "/tmp/ffmpeg_logs"
 
 # --- Logging ---
 log() {
@@ -24,52 +35,93 @@ log() {
 
 # --- Validate year (must be >= 2000) ---
 validate_year() {
-    local year="$1" current_year=$(date +%Y)
-    [[ "$year" =~ ^[0-9]{4}$ ]] && [ "$year" -ge 2000 ] && [ "$year" -le "$current_year" ] && echo "$year" || echo ""
+    local year="$1"
+    local current_year=$(date +%Y)
+    if [[ "$year" =~ ^[0-9]{4}$ ]] && [ "$year" -ge 2000 ] && [ "$year" -le "$current_year" ]; then
+        echo "$year"
+    else
+        echo ""
+    fi
 }
 
-# --- Extract date from filename ---
+# --- Extract date from filename (e.g., 20230101_photo.jpg) ---
 get_date_from_filename() {
-    local filename="$1" date_part=$(echo "$filename" | grep -oE '[0-9]{8}')
-    [ -n "$date_part" ] && {
-        local year="${date_part:0:4}" month_num="${date_part:4:2}" validated_year=$(validate_year "$year")
-        [ -n "$validated_year" ] && echo "$validated_year $month_num" || echo ""
-    } || echo ""
+    local filename="$1"
+    local date_part=$(echo "$filename" | grep -oE '[0-9]{8}')
+    if [ -n "$date_part" ]; then
+        local year="${date_part:0:4}"
+        local month_num="${date_part:4:2}"
+        local validated_year=$(validate_year "$year")
+        if [ -n "$validated_year" ]; then
+            echo "$validated_year $month_num"
+        else
+            echo ""
+        fi
+    else
+        echo ""
+    fi
 }
 
-# --- Extract date from metadata ---
+# --- Extract date from metadata or file modification time ---
 get_date() {
-    local filepath="$1" filename=$(basename "$filepath")
+    local filepath="$1"
+    local filename=$(basename "$filepath")
+
+    # Try to get date from filename first
     local date_from_name=$(get_date_from_filename "$filename")
-    [ -n "$date_from_name" ] && { echo "$date_from_name"; return; }
+    if [ -n "$date_from_name" ]; then
+        echo "$date_from_name"
+        return
+    fi
 
-    local exif_date=$(exiftool -s3 -DateTimeOriginal "$filepath" 2>/dev/null)
-    [ -n "$exif_date" ] && {
-        local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
-        local year=$(echo "$date_part" | cut -d'-' -f1) month_num=$(echo "$date_part" | cut -d'-' -f2)
-        local validated_year=$(validate_year "$year")
-        [ -n "$validated_year" ] && { echo "$validated_year $month_num"; return; }
-    }
+    # Try EXIF metadata (DateTimeOriginal)
+    if command -v exiftool &>/dev/null; then
+        local exif_date=$(exiftool -s3 -DateTimeOriginal "$filepath" 2>/dev/null)
+        if [ -n "$exif_date" ]; then
+            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
+            local year=$(echo "$date_part" | cut -d'-' -f1)
+            local month_num=$(echo "$date_part" | cut -d'-' -f2)
+            local validated_year=$(validate_year "$year")
+            if [ -n "$validated_year" ]; then
+                echo "$validated_year $month_num"
+                return
+            fi
+        fi
 
-    exif_date=$(exiftool -s3 -CreateDate "$filepath" 2>/dev/null)
-    [ -n "$exif_date" ] && {
-        local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
-        local year=$(echo "$date_part" | cut -d'-' -f1) month_num=$(echo "$date_part" | cut -d'-' -f2)
-        local validated_year=$(validate_year "$year")
-        [ -n "$validated_year" ] && { echo "$validated_year $month_num"; return; }
-    }
+        # Try CreateDate if DateTimeOriginal fails
+        exif_date=$(exiftool -s3 -CreateDate "$filepath" 2>/dev/null)
+        if [ -n "$exif_date" ]; then
+            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
+            local year=$(echo "$date_part" | cut -d'-' -f1)
+            local month_num=$(echo "$date_part" | cut -d'-' -f2)
+            local validated_year=$(validate_year "$year")
+            if [ -n "$validated_year" ]; then
+                echo "$validated_year $month_num"
+                return
+            fi
+        fi
+    fi
 
+    # Fallback: Use file modification time
     local mod_time=$(stat -c %Y "$filepath" 2>/dev/null)
-    [ -n "$mod_time" ] && {
-        local year=$(date -d "@$mod_time" +"%Y" 2>/dev/null) month_num=$(date -d "@$mod_time" +"%m" 2>/dev/null)
+    if [ -n "$mod_time" ]; then
+        local year=$(date -d "@$mod_time" +"%Y" 2>/dev/null)
+        local month_num=$(date -d "@$mod_time" +"%m" 2>/dev/null)
         local validated_year=$(validate_year "$year")
-        [ -n "$validated_year" ] && echo "$validated_year $month_num" || echo ""
-    } || echo ""
+        if [ -n "$validated_year" ]; then
+            echo "$validated_year $month_num"
+        else
+            echo ""
+        fi
+    else
+        echo ""
+    fi
 }
 
-# --- Convert month number to name ---
+# --- Convert month number to month name ---
 get_month_name() {
-    case "$1" in
+    local month_num="$1"
+    case "$month_num" in
         01|1) echo "01. January" ;;
         02|2) echo "02. February" ;;
         03|3) echo "03. March" ;;
@@ -82,112 +134,49 @@ get_month_name() {
         10) echo "10. October" ;;
         11) echo "11. November" ;;
         12) echo "12. December" ;;
-        *) echo "$1" ;;
+        *) echo "$month_num" ;;
     esac
-}
-
-# --- Check if image is blurry ---
-is_blurry() {
-    local filepath="$1" tmpfile=$(mktemp).jpg
-    darktable-cli "$filepath" "$tmpfile" >/dev/null 2>&1
-    [ $? -ne 0 ] && { rm "$tmpfile" 2>/dev/null; return 0; } || { rm "$tmpfile" 2>/dev/null; return 1; }
-}
-
-# --- Auto-enhance images ---
-auto_enhance() {
-    local filepath="$1"
-    command -v darktable-cli &>/dev/null && {
-        local tmpfile=$(mktemp).jpg
-        darktable-cli "$filepath" "$tmpfile" >/dev/null 2>&1
-        [ $? -eq 0 ] && mv "$tmpfile" "$filepath"
-        rm -f "$tmpfile" 2>/dev/null
-        [ $? -eq 0 ] && echo "Auto-enhancing with Darktable: $filepath"
-    }
-}
-
-# --- Check if video is corrupted ---
-is_video_corrupt() {
-    ffmpeg -v error -i "$1" >/tmp/ffmpeg_logs/$(basename "$1").log 2>&1
-    return $?
-}
-
-# --- Convert video to MP4 (4 fallback strategies) ---
-convert_video() {
-    local filepath="$1" filename=$(basename "$filepath") dir=$(dirname "$filepath") base="${filename%.*}"
-    local temp_output="$TEMP_DIR/${base}.mp4" new_filepath="$dir/${base}.mp4"
-    local log_file="/tmp/ffmpeg_logs/${base}.log"
-
-    # Strategy 0: Pre-check for corruption
-    if is_video_corrupt "$filepath"; then
-        echo "Skipping corrupted file: $filename" | tee -a "$LOG_FILE"
-        return 1
-    fi
-
-    # Strategy 1: HandBrakeCLI (preferred)
-    echo "Converting to MP4: $filename (HandBrakeCLI)" | tee -a "$LOG_FILE"
-    if timeout $TIMEOUT /usr/bin/HandBrakeCLI -i "$filepath" -o "$temp_output" -e x264 -q 28 -2 >> "$log_file" 2>&1; then
-        [ -f "$temp_output" ] && { rm -f "$filepath"; mv "$temp_output" "$new_filepath"; echo "Converted to MP4: $filename"; return 0; }
-    fi
-
-    # Strategy 2: ffmpeg with full re-encode (audio+video)
-    echo "Converting to MP4: $filename (ffmpeg re-encode)" | tee -a "$LOG_FILE"
-    if timeout $TIMEOUT ffmpeg -nostdin -y -i "$filepath" -c:v libx264 -crf 28 -preset fast -c:a aac -b:a 128k "$temp_output" >> "$log_file" 2>&1; then
-        [ -f "$temp_output" ] && { rm -f "$filepath"; mv "$temp_output" "$new_filepath"; echo "Converted to MP4: $filename"; return 0; }
-    fi
-
-    # Strategy 3: ffmpeg with audio copy (for problematic audio codecs)
-    echo "Converting to MP4: $filename (ffmpeg audio copy)" | tee -a "$LOG_FILE"
-    if timeout $TIMEOUT ffmpeg -nostdin -y -i "$filepath" -c:v libx264 -crf 28 -preset fast -c:a copy "$temp_output" >> "$log_file" 2>&1; then
-        [ -f "$temp_output" ] && { rm -f "$filepath"; mv "$temp_output" "$new_filepath"; echo "Converted to MP4: $filename"; return 0; }
-    fi
-
-    # Strategy 4: Last resort - copy original to preserve it
-    echo "Preserving original: $filename (conversion failed)" | tee -a "$LOG_FILE"
-    cp -f "$filepath" "$new_filepath" 2>/dev/null && {
-        rm -f "$filepath"
-        echo "Preserved original: $filename"
-        return 0
-    } || {
-        echo "Failed to process: $filename (keeping original)" | tee -a "$LOG_FILE"
-        return 1
-    }
 }
 
 # --- Process a single file ---
 process_file() {
-    local filepath="$1" filename=$(basename "$filepath")
+    local filepath="$1"
+    local filename=$(basename "$filepath")
 
-    # Skip hidden/non-media files
-    [[ "$filename" == .* ]] && return
-    [[ ! "$filename" =~ \.(jpg|jpeg|png|gif|3gp|mp4|mov|avi|mkv|JPG|JPEG|PNG|GIF|MP4|MOV|AVI|MKV)$ ]] && return
-
-    # Process videos
-    if [[ "$filename" =~ \.(3gp|mov|avi|mkv|MOV|AVI|MKV|mp4|MP4)$ ]]; then
-        if convert_video "$filepath"; then
-            filepath="$(dirname "$filepath")/$(basename "$filepath" .${filename##*.}).mp4"
-            filename=$(basename "$filepath")
-        fi
+    # Skip hidden files (e.g., .DS_Store, .thumbnails)
+    if [[ "$filename" == .* ]]; then
+        return
     fi
 
-    # Process images
-    if [[ "$filename" =~ \.(jpg|jpeg|png|gif|JPG|JPEG|PNG|GIF)$ ]]; then
-        if is_blurry "$filepath"; then
-            echo "Blurry image detected: $filename -> moving to duplicates" | tee -a "$LOG_FILE"
-            mv "$filepath" "$DUPLICATES/" 2>/dev/null && return
-        fi
-        auto_enhance "$filepath"
+    # Supported file extensions (add/remove as needed)
+    if [[ ! "$filename" =~ \.(jpg|jpeg|png|gif|heic|3gp|mp4|mov|avi|mkv|JPG|JPEG|PNG|GIF|HEIC|MP4|MOV|AVI|MKV)$ ]]; then
+        return
     fi
 
-    # Organize by date
+    # Get date
     local date_str=$(get_date "$filepath")
-    local year=$(echo "$date_str" | awk '{print $1}') month_num=$(echo "$date_str" | awk '{print $2}')
-    [ -z "$year" ] && year="notime"
-    [ -z "$month_num" ] && month_num="00"
+    local year=$(echo "$date_str" | awk '{print $1}')
+    local month_num=$(echo "$date_str" | awk '{print $2}')
 
+    # Default to "notime/00" if no date found
+    if [ -z "$year" ]; then
+        year="notime"
+    fi
+    if [ -z "$month_num" ]; then
+        month_num="00"
+    fi
+
+    # Move the file to "Year/Month Name/"
     local month_name=$(get_month_name "$month_num")
     local dest_dir="$ORGANIZED/${year}/${month_name}"
     mkdir -p "$dest_dir"
-    mv "$filepath" "$dest_dir/" 2>/dev/null && echo "Organized: $filename -> $dest_dir/" || echo "Failed to move: $filename" | tee -a "$LOG_FILE"
+
+    # Move file (log success/failure)
+    if mv "$filepath" "$dest_dir/"; then
+        echo "Organized: $filename -> $dest_dir/" | tee -a "$LOG_FILE"
+    else
+        echo "ERROR: Failed to move $filepath to $dest_dir/" | tee -a "$LOG_FILE"
+    fi
 }
 
 # --- Main workflow ---
@@ -196,7 +185,7 @@ find "$INBOX" -type f -print0 | while IFS= read -r -d '' filepath; do
     process_file "$filepath"
 done
 
-# Delete empty folders in to-be-sorted (including nested ones)
+# Clean up empty folders in to-be-sorted (EXCLUDING the root folder)
 log "Cleaning up empty folders..."
-find "$INBOX" -depth -type d -empty ! -path "$INBOX" -exec rmdir -v {} \; 2>/dev/null
+find "$INBOX" -mindepth 1 -type d -empty -exec rmdir -v {} + 2>/dev/null
 log "=== Script completed ==="
