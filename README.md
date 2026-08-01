@@ -149,13 +149,13 @@ To **prioritize file modification time**, edit `get_date()`.
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](https://github.com/CtrlAltBeard/media-organizer/blob/main/CONTRIBUTING).
 
 ---
 
 ## 📜 License
 
-MIT License – see [LICENSE](LICENSE) for details.
+MIT License – see [LICENSE](https://github.com/CtrlAltBeard/media-organizer/blob/main/LICENSE) for details.
 
 ---
 
