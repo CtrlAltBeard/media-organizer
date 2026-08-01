@@ -1,24 +1,30 @@
-# 🎬 Media Organizer
+# 📁 Media Organizer (Safe Mode)
 
 [License: MIT](https://opensource.org/licenses/MIT)
 
-**Automate the organization of your photos and videos** with this script, inspired by *"Automate the Boring Stuff with Python".* Sort files by date, convert videos to MP4, compress for storage, and auto-enhance images—all hands-free!
+**A simple, safe script to organize your photos and videos by date.**  
+No conversions, no compression, no modifications—**just sorting**.
+
+---
+
+## ⚠️ **IMPORTANT: READ BEFORE USE**
+
+- **This script ONLY moves files** into `Year/Month/` folders. It **does NOT delete, convert, or modify** your originals.
+- **Always back up your files** before running this script.
+- **Test on a small subset of files first** to ensure it works as expected.
 
 ---
 
 ## 🌟 Features
 
 
-| Feature                    | Description                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------- |
-| **Date-Based Sorting**     | Organizes files into `Year/Month/` folders using EXIF/metadata.                                   |
-| **Video Conversion**       | Converts all videos to MP4 (HandBrakeCLI + ffmpeg fallback).                                      |
-| **Compression**            | Reduces file size with H.264 (CRF 28) for storage savings.                                        |
-| **Auto-Enhance Images**    | Uses Darktable to improve photos automatically.                                                   |
-| **Blurry Image Detection** | Moves low-quality images to a `duplicates` folder.                                                |
-| **Corruption Handling**    | Skips corrupted files and logs them for review.                                                   |
-| **Timeout Protection**     | Never hangs—kills stuck processes after 2 minutes.                                                |
-| **DupeGuru Integration**   | Use [dupeGuru](https://dupeguru.volko.net/) (80% similarity) to find duplicates after organizing. |
+| Feature                                | Description                                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| **Date-Based Sorting**                 | Organizes files into `Year/Month/` folders using EXIF/metadata or filenames. |
+| **Supports Many Formats**              | JPG, PNG, GIF, HEIC, MP4, MOV, AVI, MKV, and more.                           |
+| **Fallback to File Modification Time** | If no date metadata is found, uses the file’s modification time.             |
+| **Empty Folder Cleanup**               | Removes empty folders in `to-be-sorted/` after processing.                   |
+| **Detailed Logging**                   | Logs every action to a file for debugging.                                   |
 
 
 ---
@@ -26,14 +32,13 @@
 ## 📦 Dependencies
 
 
-| Tool                  | Purpose                             | Install Command (Debian/Ubuntu)              |
-| --------------------- | ----------------------------------- | -------------------------------------------- |
-| `exiftool`            | Extract metadata (dates) from files | `sudo apt install libimage-exiftool-perl`    |
-| `ffmpeg`              | Video conversion/compression        | `sudo apt install ffmpeg`                    |
-| `darktable`           | Auto-enhance images                 | `sudo apt install darktable`                 |
-| `HandBrakeCLI`        | Primary video converter             | `sudo apt install handbrake`                 |
-| `dupeGuru` (optional) | Find duplicates                     | [Download here](https://dupeguru.volko.net/) |
+| Tool                | Purpose                          | Install Command (Ubuntu/Debian)           |
+| ------------------- | -------------------------------- | ----------------------------------------- |
+| `exiftool`          | Extract dates from file metadata | `sudo apt install libimage-exiftool-perl` |
+| `ffmpeg` (optional) | HEIC support (if needed)         | `sudo apt install ffmpeg`                 |
 
+
+**Note**: If `exiftool` is not installed, the script will fall back to file modification times.
 
 ---
 
@@ -53,15 +58,18 @@ Open `auto_organize_all.sh` and set your paths:
 ```bash
 INBOX="/path/to/your/media/to-be-sorted"    # Unsorted media folder
 ORGANIZED="/path/to/your/media/organized"    # Output folder
-DUPLICATES="/path/to/your/media/duplicates"  # Blurry/corrupt images
-TEMP_DIR="/tmp/handbrake_temp"                # Temp files
-LOG_FILE="/path/to/your/media_organizer.log"  # Log file
+LOG_FILE="/path/to/your/media_organizer.log" # Log file
 ```
 
-### 3. Run the Script
+### 3. Make the Script Executable
 
 ```bash
 chmod +x auto_organize_all.sh
+```
+
+### 4. Run the Script
+
+```bash
 ./auto_organize_all.sh
 ```
 
@@ -74,98 +82,68 @@ your_media_folder/
 ├── to-be-sorted/    # Drop unsorted files here
 │   ├── Photos/
 │   └── Videos/
-├── organized/       # Sorted output (auto-created)
-│   ├── 2023/
-│   │   ├── 01. January/
-│   │   └── 02. February/
-│   └── notime/      # Files without date metadata
-│       └── 00/
-└── duplicates/      # Blurry/corrupt images
+└── organized/       # Sorted output (auto-created)
+    ├── 2023/
+    │   ├── 01. January/
+    │   └── 02. February/
+    └── notime/      # Files without date metadata
+        └── 00/
 ```
 
 ---
 
 ## ⚙️ How It Works
 
-### For **Photos**:
-
-1. Checks if the image is blurry (using Darktable).
-2. Auto-enhances non-blurry images.
-3. Organizes by date into `Year/Month/` folders.
-
-### For **Videos**:
-
-1. **Pre-checks** for corruption.
-2. Tries **4 strategies** to convert to MP4:
-  - HandBrakeCLI (default).
-  - ffmpeg with full re-encode (audio+video).
-  - ffmpeg with audio copy (for problematic codecs).
-  - Copies original if all else fails.
-3. **Compresses** all videos (including existing MP4s).
-4. Organizes by date into `Year/Month/` folders.
-
-### For **Duplicates**:
-
-- After organizing, use **dupeGuru** (set to **80% similarity**) to find and remove duplicates.
+1. **Scans `to-be-sorted/`** for files.
+2. **Extracts dates** from:
+  - Filenames (e.g., `20230101_photo.jpg` → `2023 01`).
+  - EXIF metadata (`DateTimeOriginal` or `CreateDate`).
+  - File modification time (fallback).
+3. **Moves files** to `organized/Year/Month/` (e.g., `organized/2023/01. January/`).
+4. **Cleans up empty folders** in `to-be-sorted/`.
 
 ---
 
-## ⚠️ Known Issues &amp; Solutions
+## ⚠️ Known Limitations
 
-
-| Issue                                | Cause                       | Solution                                                              |
-| ------------------------------------ | --------------------------- | --------------------------------------------------------------------- |
-| **Script hangs on old `.avi` files** | Obscure codecs (DivX, XviD) | Script now has **4 fallback strategies** + **corruption pre-check**.  |
-| **Some videos fail to convert**      | Unsupported codecs          | Files are **preserved in original format** and logged.                |
-| **Wrong date for some files**        | Missing/incorrect metadata  | Files go to `notime/00/`. Use `exiftool` to fix metadata manually.    |
-| **Blurry images not detected**       | Darktable limitations       | Adjust Darktable’s blurry threshold or manually review.               |
-| **Script stops early**               | Permissions/path issues     | Run with `bash -x` for debugging. Ensure paths in config are correct. |
-
+- **No video conversion**: Videos are moved as-is (no MP4 conversion).
+- **No compression**: Files are not modified in any way.
+- **No duplicate detection**: Use [dupeGuru](https://dupeguru.volko.net/) (80% similarity) or `fdupes` afterward.
+- **HEIC files**: Moved as-is (no conversion). Requires `exiftool` for date extraction.
 
 ---
 
 ## 🛠️ Customization
 
-### Adjust Compression Quality
+### Add/Remove File Extensions
 
-Edit the `-crf` value in the script (lower = better quality, higher = smaller file):
-
-```bash
-# In convert_video():
-ffmpeg -c:v libx264 -crf 28  # 28 = good balance (18-28 is typical)
-```
-
-### Change Timeout
-
-Modify the `TIMEOUT` variable (in seconds):
+Edit the regex in `process_file()` to include/exclude file types:
 
 ```bash
-TIMEOUT=120  # 2 minutes per video
+if [[ ! "$filename" =~ \.(jpg|jpeg|png|gif|heic|3gp|mp4|mov|avi|mkv|JPG|JPEG|PNG|GIF|HEIC|MP4|MOV|AVI|MKV)$ ]]; then
 ```
 
-### Exclude File Types
+### Change Date Extraction Priority
 
-Edit the regex in `process_file()`:
+The script tries:
 
-```bash
-# Current: \.(jpg|jpeg|png|gif|3gp|mp4|mov|avi|mkv|JPG|JPEG|PNG|GIF|MP4|MOV|AVI|MKV)$
-# Add/remove extensions as needed.
-```
+1. Filename (e.g., `20230101_photo.jpg`).
+2. EXIF `DateTimeOriginal`.
+3. EXIF `CreateDate`.
+4. File modification time.
+
+To **prioritize file modification time**, edit `get_date()`.
 
 ---
 
 ## 📊 Performance Tips
 
-1. **Run on a PC**: Termux/Android may struggle with large video files.
-2. **Batch Processing**: For 10,000+ files, split into smaller batches.
-3. **Monitor Logs**:
+- **Run on a PC**: Faster than Termux/Android for large libraries.
+- **Monitor logs**:
   ```bash
-   tail -f /path/to/your/media_organizer.log
+  tail -f /path/to/your/media_organizer.log
   ```
-4. **Check Failed Videos**:
-  ```bash
-   cat /tmp/ffmpeg_logs/*.log
-  ```
+- **Test first**: Run on a small subset of files before processing everything.
 
 ---
 
@@ -184,5 +162,4 @@ MIT License – see [LICENSE](LICENSE) for details.
 ## 🙏 Acknowledgments
 
 - Inspired by *"Automate the Boring Stuff with Python"* by Al Sweigart.
-- Special thanks to the open-source tools: `ffmpeg`, `HandBrakeCLI`, `exiftool`, and `darktable`.
-- Designed for **set-and-forget** media organization.
+- Thanks to the open-source tools: `exiftool`, `ffmpeg`.
