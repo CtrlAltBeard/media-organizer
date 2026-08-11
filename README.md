@@ -47,7 +47,7 @@ No conversions, no compression, no modifications—**just sorting**.
 ### 1. Clone or Download
 
 ```bash
-git clone https://github.com/yourusername/media-organizer.git
+git clone https://github.com/CtlrAltBeard/media-organizer.git
 cd media-organizer
 ```
 
@@ -99,8 +99,9 @@ your_media_folder/
   - Filenames (e.g., `20230101_photo.jpg` → `2023 01`).
   - EXIF metadata (`DateTimeOriginal` or `CreateDate`).
   - File modification time (fallback).
-3. **Moves files** to `organized/Year/Month/` (e.g., `organized/2023/01. January/`).
-4. **Cleans up empty folders** in `to-be-sorted/`.
+3. **Rotate pictures** automatically detecting the correct uoriggt position. 
+4. **Moves files** to `organized/Year/Month/` (e.g., `organized/2023/01. January/`).
+5. **Cleans up empty folders** in `to-be-sorted/`.
 
 ---
 
