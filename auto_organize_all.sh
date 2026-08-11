@@ -1,29 +1,15 @@
 #!/bin/bash
 
 # =============================================
-# Media Organizer Script (SAFE MODE - Sorting Only)
-# Organizes photos/videos by date into Year/Month folders.
-# Files are NEVER modified, deleted, or converted—only moved.
-#
-# Usage:
-#   1. Edit the CONFIGURATION section below to set your paths.
-#   2. Run: chmod +x auto_organize_all.sh
-#   3. Run: ./auto_organize_all.sh
-#
-# Dependencies:
-#   - exiftool (for date extraction from metadata)
-#   - ffmpeg (optional, for HEIC support)
-#
-# Install dependencies (Ubuntu/Debian):
-#   sudo apt update
-#   sudo apt install -y exiftool ffmpeg
+# Media Organizer Script (Safe Mode + Rotation)
+# Organizes AND rotates photos/videos by date.
+# Files are NEVER deleted—only moved and rotated in-place.
 # =============================================
 
 # --- CONFIGURATION (EDIT THESE) ---
-# Set these to your actual folder paths (no trailing slashes)
-INBOX="/path/to/your/media/to-be-sorted"    # Folder with unsorted media
-ORGANIZED="/path/to/your/media/organized"    # Output folder for sorted media
-LOG_FILE="/path/to/your/media_organizer.log" # Log file path
+INBOX="/media/vex/0C6A81D16A81B7CA/Pics-and-videos/to-be-sorted"
+ORGANIZED="/media/vex/0C6A81D16A81B7CA/Pics-and-videos/organized"
+LOG_FILE="/home/vex/scripts/auto_organize_all.log"
 
 # --- Create directories ---
 mkdir -p "$INBOX" "$ORGANIZED" "/tmp/ffmpeg_logs"
@@ -44,7 +30,7 @@ validate_year() {
     fi
 }
 
-# --- Extract date from filename (e.g., 20230101_photo.jpg) ---
+# --- Extract date from filename ---
 get_date_from_filename() {
     local filename="$1"
     local date_part=$(echo "$filename" | grep -oE '[0-9]{8}')
@@ -62,60 +48,38 @@ get_date_from_filename() {
     fi
 }
 
-# --- Extract date from metadata or file modification time ---
+# --- Extract date from metadata ---
 get_date() {
     local filepath="$1"
     local filename=$(basename "$filepath")
-
-    # Try to get date from filename first
     local date_from_name=$(get_date_from_filename "$filename")
-    if [ -n "$date_from_name" ]; then
-        echo "$date_from_name"
-        return
-    fi
+    [ -n "$date_from_name" ] && { echo "$date_from_name"; return; }
 
-    # Try EXIF metadata (DateTimeOriginal)
-    if command -v exiftool &>/dev/null; then
-        local exif_date=$(exiftool -s3 -DateTimeOriginal "$filepath" 2>/dev/null)
-        if [ -n "$exif_date" ]; then
-            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
-            local year=$(echo "$date_part" | cut -d'-' -f1)
-            local month_num=$(echo "$date_part" | cut -d'-' -f2)
-            local validated_year=$(validate_year "$year")
-            if [ -n "$validated_year" ]; then
-                echo "$validated_year $month_num"
-                return
-            fi
-        fi
+    local exif_date=$(exiftool -s3 -DateTimeOriginal "$filepath" 2>/dev/null)
+    [ -n "$exif_date" ] && {
+        local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
+        local year=$(echo "$date_part" | cut -d'-' -f1)
+        local month_num=$(echo "$date_part" | cut -d'-' -f2)
+        local validated_year=$(validate_year "$year")
+        [ -n "$validated_year" ] && { echo "$validated_year $month_num"; return; }
+    }
 
-        # Try CreateDate if DateTimeOriginal fails
-        exif_date=$(exiftool -s3 -CreateDate "$filepath" 2>/dev/null)
-        if [ -n "$exif_date" ]; then
-            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
-            local year=$(echo "$date_part" | cut -d'-' -f1)
-            local month_num=$(echo "$date_part" | cut -d'-' -f2)
-            local validated_year=$(validate_year "$year")
-            if [ -n "$validated_year" ]; then
-                echo "$validated_year $month_num"
-                return
-            fi
-        fi
-    fi
+    exif_date=$(exiftool -s3 -CreateDate "$filepath" 2>/dev/null)
+    [ -n "$exif_date" ] && {
+        local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
+        local year=$(echo "$date_part" | cut -d'-' -f1)
+        local month_num=$(echo "$date_part" | cut -d'-' -f2)
+        local validated_year=$(validate_year "$year")
+        [ -n "$validated_year" ] && { echo "$validated_year $month_num"; return; }
+    }
 
-    # Fallback: Use file modification time
     local mod_time=$(stat -c %Y "$filepath" 2>/dev/null)
-    if [ -n "$mod_time" ]; then
+    [ -n "$mod_time" ] && {
         local year=$(date -d "@$mod_time" +"%Y" 2>/dev/null)
         local month_num=$(date -d "@$mod_time" +"%m" 2>/dev/null)
         local validated_year=$(validate_year "$year")
-        if [ -n "$validated_year" ]; then
-            echo "$validated_year $month_num"
-        else
-            echo ""
-        fi
-    else
-        echo ""
-    fi
+        [ -n "$validated_year" ] && echo "$validated_year $month_num" || echo ""
+    } || echo ""
 }
 
 # --- Convert month number to month name ---
@@ -138,19 +102,73 @@ get_month_name() {
     esac
 }
 
+# --- Rotate image based on EXIF Orientation tag ---
+rotate_image() {
+    local filepath="$1"
+    if ! command -v exiftool &>/dev/null; then
+        echo "WARNING: exiftool not installed. Skipping rotation for $filepath." | tee -a "$LOG_FILE"
+        return
+    fi
+
+    local orientation=$(exiftool -s3 -Orientation -n "$filepath" 2>/dev/null)
+    case "$orientation" in
+        5|6|7|8)
+            echo "Rotating image (Orientation=$orientation): $filepath" | tee -a "$LOG_FILE"
+            if exiftool -n -Orientation=1 -overwrite_original "$filepath" 2>/dev/null; then
+                echo "Rotated: $filepath" | tee -a "$LOG_FILE"
+            else
+                echo "ERROR: Failed to rotate $filepath" | tee -a "$LOG_FILE"
+            fi
+            ;;
+        *)
+            # No rotation needed (Orientation=1 or missing)
+            ;;
+    esac
+}
+
+# --- Rotate video based on metadata (if needed) ---
+rotate_video() {
+    local filepath="$1"
+    if ! command -v ffmpeg &>/dev/null; then
+        echo "WARNING: ffmpeg not installed. Skipping rotation for $filepath." | tee -a "$LOG_FILE"
+        return
+    fi
+
+    # Check for rotation metadata in video
+    local rotation=$(ffprobe -v error -select_streams v:0 -show_entries stream_tags=rotate -of default=noprint_wrappers=1:nokey=1 "$filepath" 2>/dev/null)
+    if [ -n "$rotation" ] && [ "$rotation" != "0" ]; then
+        echo "Rotating video (rotation=$rotation): $filepath" | tee -a "$LOG_FILE"
+        local temp_output="/tmp/rotated_$(basename \"$filepath\")"
+        if ffmpeg -i "$filepath" -vf "transpose=$rotation" -y "$temp_output" >> "/tmp/ffmpeg_logs/$(basename \"$filepath\").log" 2>&1; then
+            mv "$temp_output" "$filepath"
+            echo "Rotated: $filepath" | tee -a "$LOG_FILE"
+        else
+            echo "ERROR: Failed to rotate $filepath" | tee -a "$LOG_FILE"
+            rm -f "$temp_output" 2>/dev/null
+        fi
+    fi
+}
+
 # --- Process a single file ---
 process_file() {
     local filepath="$1"
     local filename=$(basename "$filepath")
 
-    # Skip hidden files (e.g., .DS_Store, .thumbnails)
+    # Skip hidden files
     if [[ "$filename" == .* ]]; then
         return
     fi
 
-    # Supported file extensions (add/remove as needed)
+    # Supported file extensions
     if [[ ! "$filename" =~ \.(jpg|jpeg|png|gif|heic|3gp|mp4|mov|avi|mkv|JPG|JPEG|PNG|GIF|HEIC|MP4|MOV|AVI|MKV)$ ]]; then
         return
+    fi
+
+    # Rotate images/videos if needed
+    if [[ "$filename" =~ \.(jpg|jpeg|png|gif|heic|JPG|JPEG|PNG|GIF|HEIC)$ ]]; then
+        rotate_image "$filepath"
+    elif [[ "$filename" =~ \.(3gp|mp4|mov|avi|mkv|MP4|MOV|AVI|MKV)$ ]]; then
+        rotate_video "$filepath"
     fi
 
     # Get date
