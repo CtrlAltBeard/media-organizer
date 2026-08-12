@@ -50,13 +50,12 @@ get_date_from_filename() {
     fi
 }
 
-# --- Extract date from metadata ---
+# --- Extract date from metadata (PRIORITY: Metadata > Filename) ---
 get_date() {
     local filepath="$1"
     local filename=$(basename "$filepath")
-    local date_from_name=$(get_date_from_filename "$filename")
-    [ -n "$date_from_name" ] && { echo "$date_from_name"; return; }
 
+    # --- PRIORITY 1: EXIF METADATA (DateTimeOriginal) ---
     if command -v exiftool &>/dev/null; then
         local exif_date=$(exiftool -s3 -DateTimeOriginal "$filepath" 2>/dev/null)
         if [ -n "$exif_date" ]; then
@@ -67,6 +66,7 @@ get_date() {
             [ -n "$validated_year" ] && { echo "$validated_year $month_num"; return; }
         fi
 
+        # --- PRIORITY 2: EXIF METADATA (CreateDate) ---
         exif_date=$(exiftool -s3 -CreateDate "$filepath" 2>/dev/null)
         if [ -n "$exif_date" ]; then
             local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
@@ -77,6 +77,11 @@ get_date() {
         fi
     fi
 
+    # --- PRIORITY 3: FILENAME (Fallback) ---
+    local date_from_name=$(get_date_from_filename "$filename")
+    [ -n "$date_from_name" ] && { echo "$date_from_name"; return; }
+
+    # --- PRIORITY 4: FILE MODIFICATION TIME (Last resort) ---
     local mod_time=$(stat -c %Y "$filepath" 2>/dev/null)
     if [ -n "$mod_time" ]; then
         local year=$(date -d "@$mod_time" +"%Y" 2>/dev/null)
@@ -177,6 +182,11 @@ process_file() {
         year="notime"
     fi
     if [ -z "$month_num" ]; then
+        month_num="00"
+    fi
+
+    # --- FIX 1: Validate month (must be 01-12) ---
+    if ! [[ "$month_num" =~ ^(0[1-9]|1[0-2])$ ]]; then
         month_num="00"
     fi
 
