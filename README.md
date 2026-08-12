@@ -1,30 +1,36 @@
-# 📁 Media Organizer (Safe Mode)
+# 📁 Media Organizer
 
 [License: MIT](https://opensource.org/licenses/MIT)
 
-**A simple, safe script to organize your photos and videos by date.**  
-No conversions, no compression, no modifications—**just sorting**.
+**A simple, safe script to organize AND auto-rotate your photos/videos by date.**
+
+- Auto-rotates images from cameras/phones based on EXIF orientation tags.
+- Respects manually edited images (no rotation if EXIF tag is missing/normal).
+- Files are **NEVER deleted**—only moved and rotated in-place.
 
 ---
 
 ## ⚠️ **IMPORTANT: READ BEFORE USE**
 
-- **This script ONLY moves files** into `Year/Month/` folders. It **does NOT delete, convert, or modify** your originals.
+- **Auto-rotation only works for images from cameras/phones** (with valid EXIF orientation tags).
+- **Manually edited images** (e.g., rotated in GIMP/Photoshop) **won’t be auto-rotated** (the script respects your changes).
 - **Always back up your files** before running this script.
-- **Test on a small subset of files first** to ensure it works as expected.
+- **Test on a small subset of files first**.
 
 ---
 
 ## 🌟 Features
 
 
-| Feature                                | Description                                                                  |
-| -------------------------------------- | ---------------------------------------------------------------------------- |
-| **Date-Based Sorting**                 | Organizes files into `Year/Month/` folders using EXIF/metadata or filenames. |
-| **Supports Many Formats**              | JPG, PNG, GIF, HEIC, MP4, MOV, AVI, MKV, and more.                           |
-| **Fallback to File Modification Time** | If no date metadata is found, uses the file’s modification time.             |
-| **Empty Folder Cleanup**               | Removes empty folders in `to-be-sorted/` after processing.                   |
-| **Detailed Logging**                   | Logs every action to a file for debugging.                                   |
+| Feature                   | Description                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| **Date-Based Sorting**    | Organizes files into `Year/Month/` folders using EXIF/metadata or filenames.       |
+| **Auto-Rotation**         | Rotates images from cameras/phones based on EXIF orientation tags (`3`, `6`, `8`). |
+| **Respects Manual Edits** | Skips rotation for images with no EXIF orientation tag (e.g., manually edited).    |
+| **Video Rotation**        | Rotates videos with rotation metadata (common in phone videos).                    |
+| **Supports Many Formats** | JPG, PNG, GIF, HEIC, MP4, MOV, AVI, MKV, and more.                                 |
+| **Empty Folder Cleanup**  | Removes empty folders in `to-be-sorted/` after processing.                         |
+| **Clean Logging**         | Only logs rotations and successful moves.                                          |
 
 
 ---
@@ -32,46 +38,37 @@ No conversions, no compression, no modifications—**just sorting**.
 ## 📦 Dependencies
 
 
-| Tool                | Purpose                          | Install Command (Ubuntu/Debian)           |
-| ------------------- | -------------------------------- | ----------------------------------------- |
-| `exiftool`          | Extract dates from file metadata | `sudo apt install libimage-exiftool-perl` |
-| `ffmpeg` (optional) | HEIC support (if needed)         | `sudo apt install ffmpeg`                 |
+| Tool       | Purpose                                                  | Install Command (Ubuntu/Debian)           |
+| ---------- | -------------------------------------------------------- | ----------------------------------------- |
+| `exiftool` | Extract dates and auto-rotate images based on EXIF tags. | `sudo apt install libimage-exiftool-perl` |
+| `ffmpeg`   | Rotate videos based on metadata.                         | `sudo apt install ffmpeg`                 |
 
-
-**Note**: If `exiftool` is not installed, the script will fall back to file modification times.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Clone or Download
-
-```bash
-git clone https://github.com/CtlrAltBeard/media-organizer.git
-cd media-organizer
-```
-
-### 2. Edit Configuration
-
-Open `auto_organize_all.sh` and set your paths:
-
-```bash
-INBOX="/path/to/your/media/to-be-sorted"    # Unsorted media folder
-ORGANIZED="/path/to/your/media/organized"    # Output folder
-LOG_FILE="/path/to/your/media_organizer.log" # Log file
-```
-
-### 3. Make the Script Executable
-
-```bash
-chmod +x auto_organize_all.sh
-```
-
-### 4. Run the Script
-
-```bash
-./auto_organize_all.sh
-```
+1. **Clone or download**:
+  ```bash
+   git clone https://github.com/yourusername/media-organizer.git
+   cd media-organizer
+  ```
+2. **Edit `auto_organize_all.sh`**:
+  ```bash
+   INBOX="/path/to/your/media/to-be-sorted"    # Unsorted media folder
+   ORGANIZED="/path/to/your/media/organized"    # Output folder
+   LOG_FILE="/path/to/your/media_organizer.log" # Log file
+  ```
+3. **Install dependencies**:
+  ```bash
+   sudo apt update
+   sudo apt install -y libimage-exiftool-perl ffmpeg
+  ```
+4. **Run the script**:
+  ```bash
+   chmod +x auto_organize_all.sh
+   ./auto_organize_all.sh
+  ```
 
 ---
 
@@ -95,22 +92,22 @@ your_media_folder/
 ## ⚙️ How It Works
 
 1. **Scans `to-be-sorted/`** for files.
-2. **Extracts dates** from:
+2. **Auto-rotates images** based on EXIF orientation tags (`3`=180°, `6`=90° CW, `8`=90° CCW).
+3. **Extracts dates** from:
   - Filenames (e.g., `20230101_photo.jpg` → `2023 01`).
   - EXIF metadata (`DateTimeOriginal` or `CreateDate`).
   - File modification time (fallback).
-3. **Rotate pictures** automatically detecting the correct uoriggt position. 
 4. **Moves files** to `organized/Year/Month/` (e.g., `organized/2023/01. January/`).
-5. **Cleans up empty folders** in `to-be-sorted/`.
+5. **Rotates videos** if metadata indicates it.
+6. **Cleans up empty folders** in `to-be-sorted/`.
 
 ---
 
 ## ⚠️ Known Limitations
 
-- **No video conversion**: Videos are moved as-is (no MP4 conversion).
-- **No compression**: Files are not modified in any way.
+- **No rotation for manually edited images**: If you rotate an image in an editor (e.g., GIMP), the script **won’t auto-rotate it** (respects your manual changes).
 - **No duplicate detection**: Use [dupeGuru](https://dupeguru.volko.net/) (80% similarity) or `fdupes` afterward.
-- **HEIC files**: Moved as-is (no conversion). Requires `exiftool` for date extraction.
+- **HEIC files**: Auto-rotation works if `exiftool` supports HEIC (requires `libheif1` on some systems).
 
 ---
 
@@ -118,45 +115,17 @@ your_media_folder/
 
 ### Add/Remove File Extensions
 
-Edit the regex in `process_file()` to include/exclude file types:
+Edit the regex in `process_file()`:
 
 ```bash
 if [[ ! "$filename" =~ \.(jpg|jpeg|png|gif|heic|3gp|mp4|mov|avi|mkv|JPG|JPEG|PNG|GIF|HEIC|MP4|MOV|AVI|MKV)$ ]]; then
 ```
 
-### Change Date Extraction Priority
-
-The script tries:
-
-1. Filename (e.g., `20230101_photo.jpg`).
-2. EXIF `DateTimeOriginal`.
-3. EXIF `CreateDate`.
-4. File modification time.
-
-To **prioritize file modification time**, edit `get_date()`.
-
----
-
-## 📊 Performance Tips
-
-- **Run on a PC**: Faster than Termux/Android for large libraries.
-- **Monitor logs**:
-  ```bash
-  tail -f /path/to/your/media_organizer.log
-  ```
-- **Test first**: Run on a small subset of files before processing everything.
-
----
-
-## 🤝 Contributing
-
-See [CONTRIBUTING.md](https://github.com/CtrlAltBeard/media-organizer/blob/main/CONTRIBUTING).
-
 ---
 
 ## 📜 License
 
-MIT License – see [LICENSE](https://github.com/CtrlAltBeard/media-organizer/blob/main/LICENSE) for details.
+MIT License – see [LICENSE](LICENSE) for details.
 
 ---
 
