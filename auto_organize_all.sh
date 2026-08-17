@@ -32,7 +32,7 @@ validate_year() {
     fi
 }
 
-# --- Extract date from filename (FIXED: Handles spaces and delimiters) ---
+# --- Extract date from filename ---
 get_date_from_filename() {
     local filename="$1"
 
