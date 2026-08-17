@@ -32,25 +32,66 @@ validate_year() {
     fi
 }
 
-# --- Extract date from filename ---
+# --- Extract date from filename (FIXED: Handles spaces and delimiters) ---
 get_date_from_filename() {
     local filename="$1"
-    local date_part=$(echo "$filename" | grep -oE '[0-9]{8}')
+
+    # Remove file extension for cleaner matching
+    local base_name="${filename%.*}"
+
+    # Try YYYYMMDD (8 digits, e.g., 20230122)
+    local date_part=$(echo "$base_name" | grep -oE '[0-9]{8}')
     if [ -n "$date_part" ]; then
         local year="${date_part:0:4}"
         local month_num="${date_part:4:2}"
         local validated_year=$(validate_year "$year")
         if [ -n "$validated_year" ]; then
             echo "$validated_year $month_num"
-        else
-            echo ""
+            return
         fi
-    else
-        echo ""
     fi
+
+    # Try YYYY-MM-DD or YYYY_MM_DD (e.g., 2023-01-22 or 2023_01_22)
+    date_part=$(echo "$base_name" | grep -oE '[0-9]{4}[-_][0-9]{2}[-_][0-9]{2}')
+    if [ -n "$date_part" ]; then
+        local normalized=$(echo "$date_part" | sed 's/_/-/g')
+        local year=$(echo "$normalized" | cut -d'-' -f1)
+        local month_num=$(echo "$normalized" | cut -d'-' -f2)
+        local validated_year=$(validate_year "$year")
+        if [ -n "$validated_year" ]; then
+            echo "$validated_year $month_num"
+            return
+        fi
+    fi
+
+    # Try YYYY-MM-DD HH.MM.SS (e.g., 2014-06-15 18.41.52)
+    date_part=$(echo "$base_name" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+    if [ -n "$date_part" ]; then
+        local year=$(echo "$date_part" | cut -d'-' -f1)
+        local month_num=$(echo "$date_part" | cut -d'-' -f2)
+        local validated_year=$(validate_year "$year")
+        if [ -n "$validated_year" ]; then
+            echo "$validated_year $month_num"
+            return
+        fi
+    fi
+
+    # Try YYYYMMDD_HHMMSS (e.g., 20230122_123456)
+    date_part=$(echo "$base_name" | grep -oE '[0-9]{8}_[0-9]{6}')
+    if [ -n "$date_part" ]; then
+        local year="${date_part:0:4}"
+        local month_num="${date_part:4:2}"
+        local validated_year=$(validate_year "$year")
+        if [ -n "$validated_year" ]; then
+            echo "$validated_year $month_num"
+            return
+        fi
+    fi
+
+    echo ""
 }
 
-# --- Extract date from metadata (PRIORITY: Metadata > Filename) ---
+# --- Extract date from metadata (PRIORITY: Metadata > Filename > Modification Time) ---
 get_date() {
     local filepath="$1"
     local filename=$(basename "$filepath")
@@ -59,7 +100,8 @@ get_date() {
     if command -v exiftool &>/dev/null; then
         local exif_date=$(exiftool -s3 -DateTimeOriginal "$filepath" 2>/dev/null)
         if [ -n "$exif_date" ]; then
-            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
+            # FIX: Use sed instead of tr to avoid delimiter issues
+            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | sed 's/:/-/g')
             local year=$(echo "$date_part" | cut -d'-' -f1)
             local month_num=$(echo "$date_part" | cut -d'-' -f2)
             local validated_year=$(validate_year "$year")
@@ -69,7 +111,7 @@ get_date() {
         # --- PRIORITY 2: EXIF METADATA (CreateDate) ---
         exif_date=$(exiftool -s3 -CreateDate "$filepath" 2>/dev/null)
         if [ -n "$exif_date" ]; then
-            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | tr ':' '-')
+            local date_part=$(echo "$exif_date" | cut -d' ' -f1 | sed 's/:/-/g')
             local year=$(echo "$date_part" | cut -d'-' -f1)
             local month_num=$(echo "$date_part" | cut -d'-' -f2)
             local validated_year=$(validate_year "$year")
@@ -77,7 +119,7 @@ get_date() {
         fi
     fi
 
-    # --- PRIORITY 3: FILENAME (Fallback) ---
+    # --- PRIORITY 3: FILENAME (Fallback for cameras/phones) ---
     local date_from_name=$(get_date_from_filename "$filename")
     [ -n "$date_from_name" ] && { echo "$date_from_name"; return; }
 
@@ -185,7 +227,7 @@ process_file() {
         month_num="00"
     fi
 
-    # --- FIX 1: Validate month (must be 01-12) ---
+    # --- FIX: Validate month (must be 01-12) ---
     if ! [[ "$month_num" =~ ^(0[1-9]|1[0-2])$ ]]; then
         month_num="00"
     fi
