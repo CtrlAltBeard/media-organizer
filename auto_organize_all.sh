@@ -253,5 +253,5 @@ done
 
 # Clean up empty folders in to-be-sorted (EXCLUDING the root folder)
 log "Cleaning up empty folders..."
-find "$INBOX" -mindepth 1 -type d -empty -exec rmdir -v {} + 2>/dev/null
+find "$INBOX" -mindepth 1 -type d -empty -delete 2>/dev/null
 log "=== Script completed ==="
